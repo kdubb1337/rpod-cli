@@ -2,14 +2,14 @@
 
 Agent-native CLI for [RunPod](https://runpod.io) — GPU pods, network volumes, and GPU type discovery.
 
-> The binary is `rpod`, not `runpod`. RunPod ships an official Python CLI on PyPI named `runpod` and a Go CLI named `runpodctl`; this project uses `rpod` to avoid PATH collisions. The repo and Go module path remain `runpod-cli`.
+> The binary is `rpod`, not `runpod`. RunPod ships an official Python CLI on PyPI named `runpod` and a Go CLI named `runpodctl`; this project uses `rpod` to avoid PATH collisions.
 
 ## Install
 
 ```
 brew install kdubb1337/tap/rpod
 # or
-go install github.com/kdubb1337/runpod-cli/cmd/rpod@latest
+go install github.com/kdubb1337/rpod-cli/cmd/rpod@latest
 ```
 
 ## Getting an API key

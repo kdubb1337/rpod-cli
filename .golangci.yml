@@ -21,7 +21,7 @@ linters:
 
 linters-settings:
   goimports:
-    local-prefixes: github.com/kdubb1337/runpod-cli
+    local-prefixes: github.com/kdubb1337/rpod-cli
   revive:
     rules:
       - name: var-naming

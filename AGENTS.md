@@ -17,7 +17,7 @@
 
 ## Coding Style & Naming Conventions
 
-- Formatting: `make fmt` (`goimports` local prefix `github.com/kdubb1337/runpod-cli` + `gofumpt`).
+- Formatting: `make fmt` (`goimports` local prefix `github.com/kdubb1337/rpod-cli` + `gofumpt`).
 - Output: keep stdout parseable (`--json` / auto-JSON when piped); send human hints/progress to stderr.
 - Treat external IDs as case-sensitive opaque tokens; only case-fold names for name lookup.
 - Verbs: `get` / `list` / `create` / `update` / `delete`. Flags: `--json` / `--force` / `--yes` / `--dry-run` / `--no-input`. `scripts/lint-naming.sh` enforces.

@@ -62,7 +62,7 @@ brews:
     repository:
       owner: kdubb1337
       name: homebrew-tap
-    homepage: "https://github.com/kdubb1337/runpod-cli"
+    homepage: "https://github.com/kdubb1337/rpod-cli"
     description: "Agent-native CLI for RunPod (GPU pods, network volumes, GPU type discovery)"
     license: "MIT"
     test: |

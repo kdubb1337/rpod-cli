@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.3.0 (2026-05-16)
+
+### Breaking
+
+- GitHub repo renamed `kdubb1337/runpod-cli` → `kdubb1337/rpod-cli`. GitHub
+  301-redirects the old URL, but update your `git remote` and `go install`
+  paths.
+- Go module path renamed `github.com/kdubb1337/runpod-cli` →
+  `github.com/kdubb1337/rpod-cli`. Anyone consuming this as a library (none
+  expected) must update import paths. `go install github.com/kdubb1337/rpod-cli/cmd/rpod@latest`.
+- Local clone dir convention now `~/git/cli/rpod` (matches the binary name).
+
+### Unchanged from v0.2.0
+
+- Binary `rpod`, config dir `~/.rpod/`, Homebrew formula `rpod`, GHCR image
+  `ghcr.io/kdubb1337/rpod`.
+- Env vars `RUNPOD_API_KEY`, `RUNPOD_ACCOUNT` (RunPod's conventions).
+- All commands and flags identical.
+
 ## v0.2.0 (2026-05-16)
 
 ### Breaking
@@ -16,8 +35,8 @@
 
 ### Unchanged
 
-- Go module path stays `github.com/kdubb1337/runpod-cli`.
-- GitHub repo stays `kdubb1337/runpod-cli`.
+- Go module path stayed `github.com/kdubb1337/runpod-cli` in v0.2.0 (renamed
+  to `rpod-cli` in v0.3.0).
 - Env vars stay `RUNPOD_API_KEY`, `RUNPOD_ACCOUNT` (those are RunPod's
   conventions, not ours).
 - All commands and flags identical.

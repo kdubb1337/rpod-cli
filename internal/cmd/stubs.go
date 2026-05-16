@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/kdubb1337/runpod-cli/internal/api"
-	"github.com/kdubb1337/runpod-cli/internal/config"
-	"github.com/kdubb1337/runpod-cli/internal/output"
+	"github.com/kdubb1337/rpod-cli/internal/api"
+	"github.com/kdubb1337/rpod-cli/internal/config"
+	"github.com/kdubb1337/rpod-cli/internal/output"
 )
 
 // This file holds the Rung-3-floor commands: doctor, agent-context, profile, auth, skill-path.

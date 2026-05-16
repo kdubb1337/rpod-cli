@@ -1,4 +1,4 @@
-module github.com/kdubb1337/runpod-cli
+module github.com/kdubb1337/rpod-cli
 
 go 1.22
 

@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/kdubb1337/runpod-cli/internal/output"
+	"github.com/kdubb1337/rpod-cli/internal/output"
 )
 
 // GraphQLEndpoint is RunPod's GraphQL surface — used for resources the REST API

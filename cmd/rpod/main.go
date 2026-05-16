@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kdubb1337/runpod-cli/internal/cmd"
+	"github.com/kdubb1337/rpod-cli/internal/cmd"
 )
 
 func main() {

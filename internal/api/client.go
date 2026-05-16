@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kdubb1337/runpod-cli/internal/output"
+	"github.com/kdubb1337/rpod-cli/internal/output"
 )
 
 const (
 	DefaultBaseURL = "https://rest.runpod.io/v1"
 	DefaultTimeout = 30 * time.Second
-	userAgent      = "runpod-cli"
+	userAgent      = "rpod-cli"
 )
 
 // Client is a thin RunPod REST API client. Construct with New.

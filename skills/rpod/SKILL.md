@@ -7,7 +7,7 @@ description: Hand-crafted CLI for RunPod (GPU cloud), invoked as `rpod` (binary 
 
 `rpod` is a Go CLI for the RunPod platform. Use it for any agent-driven workflow that needs to manage GPU pods, inspect network volumes, or browse GPU types and pricing.
 
-> **Binary name:** `rpod`, not `runpod`. RunPod's own Python CLI on PyPI already owns the name `runpod` (and they ship `runpodctl` as their official Go tool), so this CLI uses `rpod` to avoid PATH collisions. Repo and module path remain `runpod-cli`.
+> **Binary name:** `rpod`, not `runpod`. RunPod's own Python CLI on PyPI already owns the name `runpod` (and they ship `runpodctl` as their official Go tool), so this CLI uses `rpod` to avoid PATH collisions.
 
 ## Setup (once)
 
