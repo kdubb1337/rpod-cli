@@ -54,10 +54,24 @@ See `rpod agent-context` for the full schema.
 
 ## For agents
 
-A bundled `SKILL.md` ships with the binary. Find it with:
+A bundled `SKILL.md` ships with the binary. Install it into your agent of choice:
 
 ```
-rpod skill-path
+rpod skill install claude            # ~/.claude/skills/rpod
+rpod skill install claude codex      # multiple
+rpod skill install --all             # every known agent
+rpod skill install --dir ~/custom    # custom path
+rpod skill install claude --mode=copy --force
+```
+
+Known targets: `claude` (`~/.claude/skills`), `codex` (`~/.codex/skills`), `gemini` (`~/.gemini/skills`), `openhands` (`~/.openhands/microagents`), `agents` (`~/.agents/skills`, the cross-agent universal path).
+
+Default mode is `symlink` so edits to the source SKILL.md propagate instantly. Pass `--mode=copy` for a snapshot install. Check status with `rpod skill list`; remove with `rpod skill uninstall <agent>`.
+
+To find the source path of the bundled skill:
+
+```
+rpod skill path
 ```
 
 Or read it directly at `skills/rpod/SKILL.md` in this repo.

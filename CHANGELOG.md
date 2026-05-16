@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.4.0 (2026-05-16)
+
+### Breaking
+
+- `rpod skill-path` renamed to `rpod skill path` — folded into a new `skill`
+  command group alongside `install`, `uninstall`, and `list`.
+
+### Added
+
+- `rpod skill install [agent...]` symlinks (or `--mode=copy` copies) the
+  bundled SKILL.md into one or more agent skills directories. Known agents:
+  `claude` (`~/.claude/skills`), `codex` (`~/.codex/skills`), `gemini`
+  (`~/.gemini/skills`), `openhands` (`~/.openhands/microagents`), `agents`
+  (`~/.agents/skills` cross-agent universal path). Override any path via
+  `$RPOD_SKILLS_<AGENT>`. Supports `--all`, `--dir <path>`, `--force`,
+  `--dry-run`.
+- `rpod skill uninstall [agent...]` removes the installed skill.
+- `rpod skill list` reports install status across all known agents,
+  including whether each installed symlink still resolves to our source.
+
 ## v0.3.0 (2026-05-16)
 
 ### Breaking

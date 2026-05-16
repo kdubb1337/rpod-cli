@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -18,7 +20,7 @@ import (
 	"github.com/kdubb1337/rpod-cli/internal/output"
 )
 
-// This file holds the Rung-3-floor commands: doctor, agent-context, profile, auth, skill-path.
+// This file holds the Rung-3-floor commands: doctor, agent-context, profile, auth, skill.
 
 // --- doctor -----------------------------------------------------------------
 
@@ -353,35 +355,403 @@ var authRemoveCmd = &cobra.Command{
 	},
 }
 
-// --- skill-path -------------------------------------------------------------
+// --- skill ------------------------------------------------------------------
+//
+// Manage the SKILL.md that ships inside this binary. Agents discover the CLI by
+// dropping the bundled skill folder into their personal skills directory:
+//
+//   rpod skill install claude codex   # symlink into ~/.claude/skills and ~/.codex/skills
+//   rpod skill install --all          # every agent whose parent dir exists
+//   rpod skill list                   # show install status across known agents
+//   rpod skill path                   # print the source SKILL.md path
+
+type agentTarget struct {
+	Name  string
+	Dir   string
+	Notes string
+}
+
+func agentRegistry() []agentTarget {
+	home, _ := os.UserHomeDir()
+	expand := func(envKey, fallback string) string {
+		if v := os.Getenv(envKey); v != "" {
+			return v
+		}
+		return filepath.Join(home, fallback)
+	}
+	return []agentTarget{
+		{Name: "claude", Dir: expand("RPOD_SKILLS_CLAUDE", ".claude/skills"), Notes: "Claude Code (Anthropic)"},
+		{Name: "codex", Dir: expand("RPOD_SKILLS_CODEX", ".codex/skills"), Notes: "Codex CLI (OpenAI)"},
+		{Name: "gemini", Dir: expand("RPOD_SKILLS_GEMINI", ".gemini/skills"), Notes: "Gemini CLI (Google)"},
+		{Name: "openhands", Dir: expand("RPOD_SKILLS_OPENHANDS", ".openhands/microagents"), Notes: "OpenHands (V0 microagents path)"},
+		{Name: "agents", Dir: expand("RPOD_SKILLS_AGENTS", ".agents/skills"), Notes: "Cross-agent universal (Gemini, OpenHands V1)"},
+	}
+}
+
+func agentNames() []string {
+	reg := agentRegistry()
+	names := make([]string, 0, len(reg))
+	for _, a := range reg {
+		names = append(names, a.Name)
+	}
+	return names
+}
+
+func lookupAgent(name string) (agentTarget, bool) {
+	for _, a := range agentRegistry() {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return agentTarget{}, false
+}
+
+func findSkillSource() (dir string, file string, err error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", "", err
+	}
+	base := filepath.Dir(exe)
+	candidates := []string{
+		filepath.Join(base, "..", "share", "rpod", "skills", "rpod"),
+		filepath.Join(base, "skills", "rpod"),
+		filepath.Join(base, "..", "skills", "rpod"),
+	}
+	for _, c := range candidates {
+		p := filepath.Join(c, "SKILL.md")
+		if _, statErr := os.Stat(p); statErr == nil {
+			abs, _ := filepath.Abs(c)
+			return abs, filepath.Join(abs, "SKILL.md"), nil
+		}
+	}
+	return "", "", output.Errorf(1, "skill_not_found",
+		"could not locate bundled SKILL.md; tried %v (os=%s)", candidates, runtime.GOOS)
+}
+
+var skillCmd = &cobra.Command{
+	Use:   "skill",
+	Short: "Manage the bundled SKILL.md (path / install / uninstall / list)",
+	Long: `Manage the SKILL.md that ships inside this binary so agents can discover
+rpod's verbs and conventions.
+
+Known agent targets:
+  claude     ~/.claude/skills        Claude Code (Anthropic)
+  codex      ~/.codex/skills         Codex CLI (OpenAI)
+  gemini     ~/.gemini/skills        Gemini CLI (Google)
+  openhands  ~/.openhands/microagents OpenHands (V0)
+  agents     ~/.agents/skills        Cross-agent universal path
+
+Override any target's path with $RPOD_SKILLS_<AGENT> (e.g.
+RPOD_SKILLS_CLAUDE=/opt/skills/claude).`,
+}
 
 var skillPathCmd = &cobra.Command{
-	Use:   "skill-path",
+	Use:   "path",
 	Short: "Print the absolute path to the bundled SKILL.md",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		exe, err := os.Executable()
+		_, file, err := findSkillSource()
 		if err != nil {
 			return err
 		}
-		dir := filepath.Dir(exe)
-		candidates := []string{
-			filepath.Join(dir, "..", "share", "rpod", "skills", "rpod", "SKILL.md"),
-			filepath.Join(dir, "skills", "rpod", "SKILL.md"),
+		fmt.Fprintln(os.Stdout, file)
+		return nil
+	},
+}
+
+var (
+	flagSkillInstallMode string
+	flagSkillInstallAll  bool
+	flagSkillInstallDir  string
+)
+
+var skillInstallCmd = &cobra.Command{
+	Use:   "install [agent...]",
+	Short: "Install the bundled SKILL.md into one or more agent skills directories",
+	Example: `  rpod skill install claude
+  rpod skill install claude codex gemini
+  rpod skill install --all
+  rpod skill install --dir ~/.config/myagent/skills
+  rpod skill install claude --mode=copy --force --dry-run`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSkillInstall(args, false)
+	},
+}
+
+var skillUninstallCmd = &cobra.Command{
+	Use:   "uninstall [agent...]",
+	Short: "Remove the bundled SKILL.md from one or more agent skills directories",
+	Example: `  rpod skill uninstall claude
+  rpod skill uninstall --all`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSkillInstall(args, true)
+	},
+}
+
+func runSkillInstall(args []string, remove bool) error {
+	if flagSkillInstallMode != "symlink" && flagSkillInstallMode != "copy" {
+		return output.ErrorfEnum(2, "bad_mode",
+			[]string{"symlink", "copy"},
+			"--mode must be 'symlink' or 'copy' (got %q)", flagSkillInstallMode)
+	}
+
+	srcDir, _, err := findSkillSource()
+	if err != nil {
+		return err
+	}
+
+	targets, err := resolveTargets(args)
+	if err != nil {
+		return err
+	}
+
+	type result struct {
+		Agent  string `json:"agent"`
+		Path   string `json:"path"`
+		Mode   string `json:"mode,omitempty"`
+		Action string `json:"action"`
+		Detail string `json:"detail,omitempty"`
+	}
+	results := make([]result, 0, len(targets))
+
+	for _, t := range targets {
+		dest := filepath.Join(t.Dir, "rpod")
+		r := result{Agent: t.Name, Path: dest, Mode: flagSkillInstallMode}
+
+		if remove {
+			r.Action, r.Detail, err = uninstallOne(dest)
+		} else {
+			r.Action, r.Detail, err = installOne(srcDir, dest, flagSkillInstallMode, flagForce, flagDryRun)
 		}
-		for _, p := range candidates {
-			if _, err := os.Stat(p); err == nil {
-				abs, _ := filepath.Abs(p)
-				fmt.Fprintln(os.Stdout, abs)
-				return nil
+		if err != nil {
+			r.Action = "error"
+			r.Detail = err.Error()
+		}
+		results = append(results, r)
+	}
+
+	verb := "install"
+	if remove {
+		verb = "uninstall"
+	}
+	payload := map[string]any{
+		"action":  verb,
+		"mode":    flagSkillInstallMode,
+		"source":  srcDir,
+		"dry_run": flagDryRun,
+		"results": results,
+	}
+	if flagDryRun {
+		return output.EmitDryRun(payload)
+	}
+	return output.Emit(payload)
+}
+
+func resolveTargets(args []string) ([]agentTarget, error) {
+	reg := agentRegistry()
+	picked := make([]agentTarget, 0, len(reg)+len(args)+1)
+
+	if flagSkillInstallAll {
+		picked = append(picked, reg...)
+	}
+
+	for _, name := range args {
+		a, ok := lookupAgent(name)
+		if !ok {
+			return nil, output.ErrorfEnum(2, "unknown_agent",
+				agentNames(),
+				"unknown agent %q", name)
+		}
+		picked = append(picked, a)
+	}
+
+	if flagSkillInstallDir != "" {
+		expanded := flagSkillInstallDir
+		if strings.HasPrefix(expanded, "~/") {
+			home, _ := os.UserHomeDir()
+			expanded = filepath.Join(home, expanded[2:])
+		}
+		abs, _ := filepath.Abs(expanded)
+		picked = append(picked, agentTarget{Name: "custom", Dir: abs, Notes: "user-specified --dir"})
+	}
+
+	if len(picked) == 0 {
+		return nil, output.ErrorfEnum(2, "no_target",
+			append(agentNames(), "--all", "--dir"),
+			"no install target given; pass one or more of %v, or --all, or --dir <path>", agentNames())
+	}
+
+	seen := map[string]bool{}
+	deduped := make([]agentTarget, 0, len(picked))
+	for _, t := range picked {
+		if seen[t.Dir] {
+			continue
+		}
+		seen[t.Dir] = true
+		deduped = append(deduped, t)
+	}
+	sort.SliceStable(deduped, func(i, j int) bool { return deduped[i].Name < deduped[j].Name })
+	return deduped, nil
+}
+
+func installOne(srcDir, dest, mode string, force, dryRun bool) (string, string, error) {
+	parent := filepath.Dir(dest)
+
+	existing, statErr := os.Lstat(dest)
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return "error", "", statErr
+	}
+
+	if existing != nil && existing.Mode()&os.ModeSymlink != 0 {
+		target, _ := os.Readlink(dest)
+		resolved, _ := filepath.Abs(target)
+		if resolved == srcDir && mode == "symlink" {
+			return "skipped", "symlink already points at source", nil
+		}
+	}
+
+	if existing != nil && !force {
+		return "skipped", fmt.Sprintf("destination exists; pass --force to overwrite (%s)", dest), nil
+	}
+
+	action, intent := "created", "create"
+	if existing != nil {
+		action, intent = "refreshed", "refresh"
+	}
+	if dryRun {
+		return "would-" + intent, fmt.Sprintf("%s → %s (mode=%s)", srcDir, dest, mode), nil
+	}
+
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return "error", "", err
+	}
+	if existing != nil {
+		if err := os.RemoveAll(dest); err != nil {
+			return "error", "", err
+		}
+	}
+
+	switch mode {
+	case "symlink":
+		if err := os.Symlink(srcDir, dest); err != nil {
+			return "error", "", err
+		}
+	case "copy":
+		if err := copyDir(srcDir, dest); err != nil {
+			return "error", "", err
+		}
+	}
+	return action, fmt.Sprintf("%s → %s", srcDir, dest), nil
+}
+
+func uninstallOne(dest string) (string, string, error) {
+	info, err := os.Lstat(dest)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "skipped", "not installed", nil
+		}
+		return "error", "", err
+	}
+	if flagDryRun {
+		kind := "directory"
+		if info.Mode()&os.ModeSymlink != 0 {
+			kind = "symlink"
+		}
+		return "would-remove", fmt.Sprintf("remove %s at %s", kind, dest), nil
+	}
+	if err := os.RemoveAll(dest); err != nil {
+		return "error", "", err
+	}
+	return "removed", dest, nil
+}
+
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		return copyFile(path, target, info.Mode().Perm())
+	})
+}
+
+func copyFile(src, dst string, perm os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
+}
+
+var skillListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "Show the bundled SKILL.md install status across known agents",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		srcDir, _, err := findSkillSource()
+		if err != nil {
+			return err
+		}
+		type row struct {
+			Agent     string `json:"agent"`
+			Path      string `json:"path"`
+			Notes     string `json:"notes"`
+			Installed bool   `json:"installed"`
+			Mode      string `json:"mode,omitempty"`
+			LinksToUs bool   `json:"links_to_us,omitempty"`
+		}
+		var rows []row
+		for _, t := range agentRegistry() {
+			dest := filepath.Join(t.Dir, "rpod")
+			r := row{Agent: t.Name, Path: dest, Notes: t.Notes}
+			if info, err := os.Lstat(dest); err == nil {
+				r.Installed = true
+				if info.Mode()&os.ModeSymlink != 0 {
+					r.Mode = "symlink"
+					if target, err := os.Readlink(dest); err == nil {
+						resolved, _ := filepath.Abs(target)
+						r.LinksToUs = resolved == srcDir
+					}
+				} else if info.IsDir() {
+					r.Mode = "copy"
+				} else {
+					r.Mode = "file"
+				}
 			}
+			rows = append(rows, r)
 		}
-		return output.Errorf(1, "skill_not_found",
-			"could not locate bundled SKILL.md; tried %v (os=%s)", candidates, runtime.GOOS)
+		return output.Emit(map[string]any{
+			"source":  srcDir,
+			"targets": rows,
+		})
 	},
 }
 
 func init() {
 	profileCmd.AddCommand(profileListCmd, profileSaveCmd, profileUseCmd, profileDeleteCmd)
 	authCmd.AddCommand(authListCmd, authAddCmd, authRemoveCmd)
-	rootCmd.AddCommand(doctorCmd, agentContextCmd, profileCmd, authCmd, skillPathCmd)
+
+	skillInstallCmd.Flags().StringVar(&flagSkillInstallMode, "mode", "symlink", "install mode: symlink|copy")
+	skillInstallCmd.Flags().BoolVar(&flagSkillInstallAll, "all", false, "install to every known agent in the registry")
+	skillInstallCmd.Flags().StringVar(&flagSkillInstallDir, "dir", "", "additional custom skills directory to install into")
+	skillUninstallCmd.Flags().BoolVar(&flagSkillInstallAll, "all", false, "uninstall from every known agent in the registry")
+	skillUninstallCmd.Flags().StringVar(&flagSkillInstallDir, "dir", "", "additional custom skills directory to uninstall from")
+
+	skillCmd.AddCommand(skillPathCmd, skillInstallCmd, skillUninstallCmd, skillListCmd)
+	rootCmd.AddCommand(doctorCmd, agentContextCmd, profileCmd, authCmd, skillCmd)
 }

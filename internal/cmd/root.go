@@ -64,7 +64,11 @@ Discover the structured schema with:
   rpod agent-context
 
 See the bundled skill (commands + workflows for agents) with:
-  rpod skill-path`,
+  rpod skill path
+
+Install the bundled skill into your agent(s) of choice:
+  rpod skill install claude codex
+  rpod skill install --all`,
 	Version:           fmt.Sprintf("%s (%s, %s)", version, commit, date),
 	SilenceUsage:      true,
 	SilenceErrors:     true,

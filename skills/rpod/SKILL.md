@@ -110,6 +110,19 @@ The `id` field from `gpu list` is what `pod create --gpu-type` expects.
 2. For container logs, use the RunPod dashboard (no REST endpoint)
 3. If exit code 5 from the API, retry with backoff; if exit 4, check `rpod doctor`
 
+## Installing this skill into another agent
+
+The CLI can drop a copy of itself into any supported agent's skills directory:
+
+```
+rpod skill install claude            # ~/.claude/skills/rpod
+rpod skill install --all             # every known agent
+rpod skill list                      # show install status
+rpod skill uninstall openhands       # remove from one agent
+```
+
+Default mode is `--mode=symlink`; use `--mode=copy` for a snapshot install.
+
 ## Notes
 
 - Set `RUNPOD_API_KEY` and you can skip `rpod auth add` entirely.
