@@ -25,7 +25,7 @@ import (
 var doctorCmd = &cobra.Command{
 	Use:     "doctor",
 	Short:   "Health check: config, credentials, API reachability",
-	Example: `  runpod doctor --json`,
+	Example: `  rpod doctor --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		type check struct {
 			Name   string `json:"name"`
@@ -52,7 +52,7 @@ var doctorCmd = &cobra.Command{
 			checks = append(checks, check{
 				Name:   "credentials",
 				Status: "fail",
-				Detail: "no API key (set RUNPOD_API_KEY or run `runpod auth add <key>`)",
+				Detail: "no API key (set RUNPOD_API_KEY or run `rpod auth add <key>`)",
 			})
 		} else {
 			checks = append(checks, check{
@@ -196,8 +196,8 @@ var profileSaveCmd = &cobra.Command{
 	Use:   "save <name>",
 	Short: "Save the current resolved configuration as a named profile",
 	Args:  cobra.ExactArgs(1),
-	Example: `  RUNPOD_API_KEY=... runpod profile save default
-  runpod profile save staging --account org_xyz`,
+	Example: `  RUNPOD_API_KEY=... rpod profile save default
+  rpod profile save staging --account org_xyz`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		store, err := config.Load()
 		if err != nil {
@@ -206,7 +206,7 @@ var profileSaveCmd = &cobra.Command{
 		cur := config.Current()
 		if cur.APIKey == "" {
 			return output.ErrorfHint(2, "no_api_key",
-				"set RUNPOD_API_KEY or run `runpod auth add <key>` first",
+				"set RUNPOD_API_KEY or run `rpod auth add <key>` first",
 				"cannot save profile without an API key")
 		}
 		store.Profiles[args[0]] = config.Profile{
@@ -227,7 +227,7 @@ var profileUseCmd = &cobra.Command{
 	Use:     "use <name>",
 	Short:   "Set the default profile",
 	Args:    cobra.ExactArgs(1),
-	Example: `  runpod profile use staging`,
+	Example: `  rpod profile use staging`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		store, err := config.Load()
 		if err != nil {
@@ -254,7 +254,7 @@ var profileDeleteCmd = &cobra.Command{
 	Use:     "delete <name>",
 	Short:   "Delete a saved profile",
 	Args:    cobra.ExactArgs(1),
-	Example: `  runpod profile delete staging --force`,
+	Example: `  rpod profile delete staging --force`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !flagForce && !flagYes {
 			return output.ErrorfHint(2, "confirmation_required",
@@ -298,11 +298,11 @@ var authAddCmd = &cobra.Command{
 	Use:   "add <api-key>",
 	Short: "Save an API key as a named profile",
 	Args:  cobra.ExactArgs(1),
-	Long: `Stores the RunPod API key in ~/.runpod/config.json (mode 0600).
+	Long: `Stores the RunPod API key in ~/.rpod/config.json (mode 0600).
 
 For a TTY-friendly flow you can also export RUNPOD_API_KEY and skip this command entirely.`,
-	Example: `  runpod auth add rpa_xxx --profile default
-  runpod auth add rpa_yyy --profile staging`,
+	Example: `  rpod auth add rpa_xxx --profile default
+  rpod auth add rpa_yyy --profile staging`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Reuse the persistent --profile flag (defined on root).
 		target := flagProfile
@@ -365,8 +365,8 @@ var skillPathCmd = &cobra.Command{
 		}
 		dir := filepath.Dir(exe)
 		candidates := []string{
-			filepath.Join(dir, "..", "share", "runpod", "skills", "runpod", "SKILL.md"),
-			filepath.Join(dir, "skills", "runpod", "SKILL.md"),
+			filepath.Join(dir, "..", "share", "rpod", "skills", "rpod", "SKILL.md"),
+			filepath.Join(dir, "skills", "rpod", "SKILL.md"),
 		}
 		for _, p := range candidates {
 			if _, err := os.Stat(p); err == nil {

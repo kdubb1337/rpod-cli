@@ -41,14 +41,17 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "runpod",
+	Use:   "rpod",
 	Short: "Agent-native CLI for RunPod (GPU pods, network volumes, GPU types)",
-	Long: `runpod is a hand-crafted, agent-native CLI for the RunPod platform.
+	Long: `rpod is a hand-crafted, agent-native CLI for the RunPod platform.
+
+Binary is named "rpod" to avoid colliding with RunPod's official Python CLI
+("runpod" on PyPI) and Go CLI ("runpodctl").
 
 Resources: pods (create/list/get/delete/start/stop), volumes (list/get),
 gpus (list available types + pricing).
 
-Authentication: set RUNPOD_API_KEY or run "runpod auth add <key>".
+Authentication: set RUNPOD_API_KEY or run "rpod auth add <key>".
 
 Output rules:
   - stdout is data; stderr is human progress and errors.
@@ -58,10 +61,10 @@ Output rules:
       6=conflict 7=rate-limit 8=network 9=validation 124=timeout
 
 Discover the structured schema with:
-  runpod agent-context
+  rpod agent-context
 
 See the bundled skill (commands + workflows for agents) with:
-  runpod skill-path`,
+  rpod skill-path`,
 	Version:           fmt.Sprintf("%s (%s, %s)", version, commit, date),
 	SilenceUsage:      true,
 	SilenceErrors:     true,

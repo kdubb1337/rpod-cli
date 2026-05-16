@@ -2,15 +2,15 @@
 
 ## Project Structure
 
-- `cmd/runpod/`: CLI entrypoint.
+- `cmd/rpod/`: CLI entrypoint.
 - `internal/`: implementation (`cmd/`, API client, OAuth, config/secrets, output/UI).
 - Tests: `*_test.go` next to code; opt-in integration suite in `internal/integration/` (build-tagged).
 - `bin/`: build outputs. `docs/`: design + releasing. `scripts/`: release + lint helpers.
-- `skills/runpod/SKILL.md`: bundled skill for downstream agents using the CLI.
+- `skills/rpod/SKILL.md`: bundled skill for downstream agents using the CLI.
 
 ## Build, Test, and Development Commands
 
-- `make` / `make build`: build `bin/runpod`.
+- `make` / `make build`: build `bin/rpod`.
 - `make tools`: install pinned dev tools into `.tools/`.
 - `make fmt` / `make lint` / `make test` / `make ci`: format, lint, test, full local gate.
 - Hooks: `git config core.hooksPath hooks` enables pre-commit/pre-push checks.

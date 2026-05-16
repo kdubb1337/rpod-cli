@@ -73,7 +73,7 @@ type Profile struct {
 	APIKey  string `json:"api_key,omitempty"`
 }
 
-// Store is the full ~/.runpod/config.json document.
+// Store is the full ~/.rpod/config.json document.
 type Store struct {
 	DefaultProfile string             `json:"default_profile,omitempty"`
 	Profiles       map[string]Profile `json:"profiles,omitempty"`
@@ -84,7 +84,7 @@ func configDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".runpod"), nil
+	return filepath.Join(home, ".rpod"), nil
 }
 
 func configPath() (string, error) {

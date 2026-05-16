@@ -74,7 +74,7 @@ func exitFor(status int) int {
 func (c *Client) Do(ctx context.Context, method, path string, body any, out any) error {
 	if c.APIKey == "" {
 		return output.ErrorfHint(4, "auth_missing",
-			"set RUNPOD_API_KEY or run `runpod auth add <key>`",
+			"set RUNPOD_API_KEY or run `rpod auth add <key>`",
 			"no API key configured")
 	}
 

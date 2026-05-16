@@ -1,6 +1,6 @@
 .PHONY: build fmt lint test test-integration ci tools install clean
 
-CLI_NAME := runpod
+CLI_NAME := rpod
 MODULE   := $(shell go list -m)
 
 # Resolve dev tools. Prefer system install if present; fall back to .tools/

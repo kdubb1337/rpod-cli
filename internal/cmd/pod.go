@@ -34,9 +34,9 @@ var (
 var podListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List pods on the account",
-	Example: `  runpod pod list --json
-  runpod pod list --status RUNNING --compact
-  runpod pod list --limit 5`,
+	Example: `  rpod pod list --json
+  rpod pod list --status RUNNING --compact
+  rpod pod list --limit 5`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, cancel := context.WithCancel(cmd.Context())
 		defer cancel()
@@ -59,8 +59,8 @@ var podGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a single pod by ID",
 	Args:  cobra.ExactArgs(1),
-	Example: `  runpod pod get abc123 --json
-  runpod pod get abc123 --compact`,
+	Example: `  rpod pod get abc123 --json
+  rpod pod get abc123 --compact`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pod, err := newClient().GetPod(cmd.Context(), args[0])
 		if err != nil {
@@ -97,13 +97,13 @@ var podCreateCmd = &cobra.Command{
 	Short: "Create a new pod",
 	Long: `Create a new RunPod pod. --image and --gpu-type are required.
 
-Discover valid --gpu-type values with: runpod gpu list`,
+Discover valid --gpu-type values with: rpod gpu list`,
 	Example: `  # Dry-run first
-  runpod pod create --image runpod/pytorch:2.4.0 \
+  rpod pod create --image runpod/pytorch:2.4.0 \
     --gpu-type NVIDIA_GEFORCE_RTX_4090 --gpu-count 1 --dry-run
 
   # Real create with a network volume mounted
-  runpod pod create --name my-pod --image runpod/pytorch:2.4.0 \
+  rpod pod create --name my-pod --image runpod/pytorch:2.4.0 \
     --gpu-type "NVIDIA RTX A6000" --container-disk 20 \
     --volume-id vol_abc --volume-mount /workspace`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -113,7 +113,7 @@ Discover valid --gpu-type values with: runpod gpu list`,
 		}
 		if podCreateGPUType == "" {
 			return output.Errorf(2, "missing_flag",
-				"--gpu-type is required (discover with: runpod gpu list)")
+				"--gpu-type is required (discover with: rpod gpu list)")
 		}
 
 		if podCreateCloudType != "" {
@@ -178,8 +178,8 @@ var podDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
 	Short: "Delete a pod (destructive; requires --force or --yes)",
 	Args:  cobra.ExactArgs(1),
-	Example: `  runpod pod delete abc123 --dry-run
-  runpod pod delete abc123 --force`,
+	Example: `  rpod pod delete abc123 --dry-run
+  rpod pod delete abc123 --force`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 		if flagDryRun {
@@ -203,7 +203,7 @@ var podStartCmd = &cobra.Command{
 	Use:     "start <id>",
 	Short:   "Resume a stopped pod",
 	Args:    cobra.ExactArgs(1),
-	Example: `  runpod pod start abc123`,
+	Example: `  rpod pod start abc123`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if flagDryRun {
 			return output.EmitDryRun(map[string]any{"would_start_pod": args[0]})
@@ -220,7 +220,7 @@ var podStopCmd = &cobra.Command{
 	Use:     "stop <id>",
 	Short:   "Stop a running pod (preserves volume)",
 	Args:    cobra.ExactArgs(1),
-	Example: `  runpod pod stop abc123`,
+	Example: `  rpod pod stop abc123`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if flagDryRun {
 			return output.EmitDryRun(map[string]any{"would_stop_pod": args[0]})
@@ -261,7 +261,7 @@ func init() {
 	pf := podCreateCmd.Flags()
 	pf.StringVar(&podCreateName, "name", "", "pod name (optional, defaults to a generated name)")
 	pf.StringVar(&podCreateImage, "image", "", "container image (e.g. runpod/pytorch:2.4.0)")
-	pf.StringVar(&podCreateGPUType, "gpu-type", "", "GPU type ID (discover via: runpod gpu list)")
+	pf.StringVar(&podCreateGPUType, "gpu-type", "", "GPU type ID (discover via: rpod gpu list)")
 	pf.IntVar(&podCreateGPUCount, "gpu-count", 1, "number of GPUs to attach")
 	pf.StringVar(&podCreateCloudType, "cloud-type", "", "SECURE or COMMUNITY (default: SECURE)")
 	pf.IntVar(&podCreateContainerDisk, "container-disk", 10, "container disk size in GB")

@@ -5,9 +5,9 @@ before:
     - go mod tidy
 
 builds:
-  - id: runpod
-    main: ./cmd/runpod
-    binary: runpod
+  - id: rpod
+    main: ./cmd/rpod
+    binary: rpod
     env:
       - CGO_ENABLED=0  # set 1 if you depend on mattn/go-sqlite3
     goos: [linux, darwin, windows]
@@ -58,7 +58,7 @@ changelog:
       - '^chore:'
 
 brews:
-  - name: runpod
+  - name: rpod
     repository:
       owner: kdubb1337
       name: homebrew-tap
@@ -66,15 +66,15 @@ brews:
     description: "Agent-native CLI for RunPod (GPU pods, network volumes, GPU type discovery)"
     license: "MIT"
     test: |
-      system "#{bin}/runpod", "--version"
+      system "#{bin}/rpod", "--version"
     install: |
-      bin.install "runpod"
+      bin.install "rpod"
       pkgshare.install "skills" if File.directory?("skills")
 
 dockers:
   - image_templates:
-      - "ghcr.io/kdubb1337/runpod:{{ .Version }}"
-      - "ghcr.io/kdubb1337/runpod:latest"
+      - "ghcr.io/kdubb1337/rpod:{{ .Version }}"
+      - "ghcr.io/kdubb1337/rpod:latest"
     dockerfile: Dockerfile
     use: buildx
     build_flag_templates:

@@ -25,10 +25,10 @@ var gpuListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available GPU types",
 	Long: "Returns every GPU type RunPod offers. Use the returned `id` as\n" +
-		"the --gpu-type value for `runpod pod create`.",
-	Example: `  runpod gpu list --json
-  runpod gpu list --filter A6000
-  runpod gpu list --min-memory 48 --community`,
+		"the --gpu-type value for `rpod pod create`.",
+	Example: `  rpod gpu list --json
+  rpod gpu list --filter A6000
+  rpod gpu list --min-memory 48 --community`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gpus, err := newClient().ListGPUTypes(cmd.Context())
 		if err != nil {

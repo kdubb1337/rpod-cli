@@ -15,7 +15,7 @@ var volumeCmd = &cobra.Command{
 var volumeListCmd = &cobra.Command{
 	Use:     "list",
 	Short:   "List network volumes on the account",
-	Example: `  runpod volume list --json`,
+	Example: `  rpod volume list --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vols, err := newClient().ListVolumes(cmd.Context())
 		if err != nil {
@@ -29,7 +29,7 @@ var volumeGetCmd = &cobra.Command{
 	Use:     "get <id>",
 	Short:   "Get a single network volume by ID",
 	Args:    cobra.ExactArgs(1),
-	Example: `  runpod volume get vol_abc --json`,
+	Example: `  rpod volume get vol_abc --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		v, err := newClient().GetVolume(cmd.Context(), args[0])
 		if err != nil {
