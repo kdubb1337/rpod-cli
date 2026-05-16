@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -75,7 +77,7 @@ var podGetCmd = &cobra.Command{
 var (
 	podCreateName            string
 	podCreateImage           string
-	podCreateGPUType         string
+	podCreateGPUTypes        []string
 	podCreateGPUCount        int
 	podCreateCloudType       string
 	podCreateContainerDisk   int
@@ -90,6 +92,10 @@ var (
 	podCreateMinRAMPerGPU    int
 	podCreateTemplateID      string
 	podCreateInterruptible   bool
+	podCreateSSHKeyFile      string
+	podCreateWait            bool
+	podCreateWaitPorts       []int
+	podCreateWaitTimeout     time.Duration
 )
 
 var podCreateCmd = &cobra.Command{
@@ -97,21 +103,30 @@ var podCreateCmd = &cobra.Command{
 	Short: "Create a new pod",
 	Long: `Create a new RunPod pod. --image and --gpu-type are required.
 
+--gpu-type is repeatable; RunPod will pick the first SKU with capacity:
+
+  rpod pod create --gpu-type "NVIDIA H200" --gpu-type "NVIDIA H200 NVL" ...
+
+If every SKU is out of capacity the call fails with code=capacity
+(exit 6); see ` + "`rpod agent-context`" + ` for the full taxonomy.
+
 Discover valid --gpu-type values with: rpod gpu list`,
 	Example: `  # Dry-run first
   rpod pod create --image runpod/pytorch:2.4.0 \
     --gpu-type NVIDIA_GEFORCE_RTX_4090 --gpu-count 1 --dry-run
 
-  # Real create with a network volume mounted
+  # Real create with a network volume + block until SSH is reachable
   rpod pod create --name my-pod --image runpod/pytorch:2.4.0 \
     --gpu-type "NVIDIA RTX A6000" --container-disk 20 \
-    --volume-id vol_abc --volume-mount /workspace`,
+    --volume-id vol_abc --volume-mount /workspace \
+    --ssh-key-file ~/.ssh/id_ed25519.pub --public-ip \
+    --wait --wait-port 22`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if podCreateImage == "" && podCreateTemplateID == "" {
 			return output.Errorf(2, "missing_flag",
 				"one of --image or --template-id is required")
 		}
-		if podCreateGPUType == "" {
+		if len(podCreateGPUTypes) == 0 {
 			return output.Errorf(2, "missing_flag",
 				"--gpu-type is required (discover with: rpod gpu list)")
 		}
@@ -136,11 +151,31 @@ Discover valid --gpu-type values with: rpod gpu list`,
 		if err != nil {
 			return err
 		}
+		if podCreateSSHKeyFile != "" {
+			if env == nil {
+				env = map[string]string{}
+			}
+			key, err := os.ReadFile(podCreateSSHKeyFile)
+			if err != nil {
+				return output.Errorf(2, "bad_ssh_key_file",
+					"could not read --ssh-key-file %q: %v", podCreateSSHKeyFile, err)
+			}
+			trimmed := strings.TrimSpace(string(key))
+			if trimmed == "" {
+				return output.Errorf(2, "bad_ssh_key_file",
+					"--ssh-key-file %q is empty", podCreateSSHKeyFile)
+			}
+			if existing, ok := env["PUBLIC_KEY"]; ok && existing != trimmed {
+				return output.Errorf(2, "ssh_key_conflict",
+					"both --env PUBLIC_KEY=... and --ssh-key-file were set with different values")
+			}
+			env["PUBLIC_KEY"] = trimmed
+		}
 
 		req := api.CreatePodRequest{
 			Name:              podCreateName,
 			ImageName:         podCreateImage,
-			GPUTypeIDs:        []string{podCreateGPUType},
+			GPUTypeIDs:        podCreateGPUTypes,
 			GPUCount:          podCreateGPUCount,
 			CloudType:         podCreateCloudType,
 			ContainerDiskInGb: podCreateContainerDisk,
@@ -161,12 +196,23 @@ Discover valid --gpu-type values with: rpod gpu list`,
 			return output.EmitDryRun(map[string]any{
 				"would_create": req,
 				"endpoint":     "POST /pods",
+				"wait":         podCreateWait,
+				"wait_ports":   podCreateWaitPorts,
 			})
 		}
 
 		pod, err := newClient().CreatePod(cmd.Context(), req)
 		if err != nil {
 			return err
+		}
+		if podCreateWait {
+			pod, err = waitForPod(cmd.Context(), pod.ID, waitOptions{
+				Ports:   podCreateWaitPorts,
+				Timeout: podCreateWaitTimeout,
+			})
+			if err != nil {
+				return err
+			}
 		}
 		return output.Emit(pod)
 	},
@@ -261,7 +307,8 @@ func init() {
 	pf := podCreateCmd.Flags()
 	pf.StringVar(&podCreateName, "name", "", "pod name (optional, defaults to a generated name)")
 	pf.StringVar(&podCreateImage, "image", "", "container image (e.g. runpod/pytorch:2.4.0)")
-	pf.StringVar(&podCreateGPUType, "gpu-type", "", "GPU type ID (discover via: rpod gpu list)")
+	pf.StringSliceVar(&podCreateGPUTypes, "gpu-type", nil,
+		"GPU type ID (repeatable; RunPod picks the first with capacity)")
 	pf.IntVar(&podCreateGPUCount, "gpu-count", 1, "number of GPUs to attach")
 	pf.StringVar(&podCreateCloudType, "cloud-type", "", "SECURE or COMMUNITY (default: SECURE)")
 	pf.IntVar(&podCreateContainerDisk, "container-disk", 10, "container disk size in GB")
@@ -276,6 +323,14 @@ func init() {
 	pf.IntVar(&podCreateMinRAMPerGPU, "min-ram-per-gpu", 0, "minimum RAM (GB) per GPU")
 	pf.StringVar(&podCreateTemplateID, "template-id", "", "use a Runpod template (omits --image)")
 	pf.BoolVar(&podCreateInterruptible, "interruptible", false, "create a spot/interruptible pod")
+	pf.StringVar(&podCreateSSHKeyFile, "ssh-key-file", "",
+		"path to a public key; populates PUBLIC_KEY env so sshd accepts it")
+	pf.BoolVar(&podCreateWait, "wait", false,
+		"after creating, block until the pod reaches RUNNING (see --wait-port, --wait-timeout)")
+	pf.IntSliceVar(&podCreateWaitPorts, "wait-port", nil,
+		"with --wait, also require these private ports to appear in runtime.ports (repeatable)")
+	pf.DurationVar(&podCreateWaitTimeout, "wait-timeout", 5*time.Minute,
+		"with --wait, give up after this much wall time")
 
 	podCmd.AddCommand(podListCmd, podGetCmd, podCreateCmd, podDeleteCmd, podStartCmd, podStopCmd)
 	rootCmd.AddCommand(podCmd)

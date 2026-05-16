@@ -39,7 +39,7 @@ rpod profile list
   - `3` not found — resource missing; don't retry
   - `4` auth — run `rpod doctor`; don't retry the same call
   - `5` api / 5xx — retry with backoff
-  - `6` conflict — read response, decide
+  - `6` conflict — read response, decide. **Includes `error.code = "capacity"` when a GPU SKU is out of stock; retry with a different `--gpu-type` or `--data-center`.**
   - `7` rate limited — back off, retry later
   - `8` network — retry with backoff
   - `9` validation — fix input, retry (`valid_values` is often populated)
@@ -68,8 +68,50 @@ rpod pod start <pod-id>
 rpod pod delete <pod-id> --force
 ```
 
-> `pod logs` is not in the RunPod REST API. Use the RunPod web dashboard or
-> the GraphQL API for live container logs.
+#### Block-until-ready, then push files and run
+
+`pod create --wait` collapses the create-then-poll loop into one call; `pod cp` and `pod exec` wrap ssh/scp with endpoint discovery so scripts don't have to grep `runtime.ports`.
+
+```
+# Create + wait for SSH and HTTP 8000 to be exposed, all in one go
+rpod pod create --image runpod/pytorch:2.4.0 \
+  --gpu-type "NVIDIA H200" --gpu-type "NVIDIA H200 NVL" \
+  --public-ip --ssh-key-file ~/.ssh/id_ed25519.pub \
+  --port 22/tcp --port 8000/http \
+  --wait --wait-port 22 --wait-port 8000 --wait-timeout 5m
+
+# Or: poll an already-created pod
+rpod pod wait <pod-id> --port 22 --port 8000 --timeout 5m
+
+# Inspect what's reachable (direct vs proxy SSH, HTTP proxy URLs)
+rpod pod ssh-info <pod-id> --json
+rpod pod url      <pod-id> 8000          # https://<id>-8000.proxy.runpod.net
+
+# Run commands and copy files
+rpod pod exec <pod-id> -- nvidia-smi
+rpod pod exec <pod-id> --identity ~/.ssh/id_ed25519
+rpod pod cp   ./inference.py <pod-id>:/workspace/inference.py
+rpod pod cp -r ./src <pod-id>:/workspace/src
+```
+
+Direct SSH (`root@<ip>:<publicPort>`) is preferred when `--public-ip` is set. Otherwise rpod falls back to RunPod's proxy form (`<pod-id>@ssh.runpod.io`); force the proxy with `--use-proxy`.
+
+#### Capacity errors (out-of-stock GPUs)
+
+When every requested GPU SKU is out of capacity, the call exits with **code 6** and `error.code = "capacity"` in the structured envelope on stderr — that's the signal to retry with a different `--gpu-type` or `--data-center`. Never substring-match the message; branch on `error.code`.
+
+```
+rpod pod create ... --json 2>err.json
+test $? = 6 && jq -e '.error.code == "capacity"' err.json && retry_with_other_gpu
+```
+
+You can also pass multiple `--gpu-type` flags and let RunPod pick the first SKU with capacity:
+
+```
+rpod pod create --gpu-type "NVIDIA H200" --gpu-type "NVIDIA H200 NVL" ...
+```
+
+> `pod logs` is not in the RunPod REST API. Use the RunPod web dashboard, the GraphQL API, or `rpod pod exec <id> -- tail -f /workspace/...` against a known log file.
 
 ### Volumes
 
@@ -94,9 +136,11 @@ The `id` field from `gpu list` is what `pod create --gpu-type` expects.
 
 1. Discover the GPU: `rpod gpu list --filter 4090 --compact`
 2. Dry-run the create: `rpod pod create --image runpod/pytorch:2.4.0 --gpu-type <id> --container-disk 20 --dry-run`
-3. Real create: same command without `--dry-run`
-4. Wait for it: `rpod pod get <id> --select id,desiredStatus,publicIp,ports` (poll until `desiredStatus=RUNNING`)
+3. Real create + block until SSH is up: add `--public-ip --ssh-key-file ~/.ssh/id_ed25519.pub --wait --wait-port 22 --wait-timeout 5m`
+4. Push code and run: `rpod pod cp ./infer.py <id>:/workspace/ && rpod pod exec <id> -- python /workspace/infer.py`
 5. Tear down: `rpod pod delete <id> --force` or `rpod pod stop <id>` to preserve the volume
+
+If a create fails with `code=capacity` (exit 6), retry with a different `--gpu-type` from `rpod gpu list`, or pass several `--gpu-type` flags in one call.
 
 ### Attach a persistent network volume
 

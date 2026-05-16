@@ -102,7 +102,11 @@ var doctorCmd = &cobra.Command{
 // --- agent-context ----------------------------------------------------------
 
 // SchemaVersion is bumped on any breaking change to the agent-context output shape.
-const SchemaVersion = 1
+//
+//	v1 — initial pod/volume/gpu surface.
+//	v2 — pod ssh-info, url, wait, exec, cp; pod create --gpu-type repeatable,
+//	     --ssh-key-file, --wait; capacity-error envelope (code=capacity).
+const SchemaVersion = 2
 
 var agentContextCmd = &cobra.Command{
 	Use:   "agent-context",
@@ -131,6 +135,15 @@ func buildAgentContext(root *cobra.Command) map[string]any {
 			"ok": 0, "generic": 1, "usage": 2, "not_found": 3, "auth": 4,
 			"api": 5, "conflict": 6, "rate_limit": 7, "network": 8,
 			"validation": 9, "timeout": 124,
+		},
+		"error_codes": map[string]string{
+			// Non-exhaustive — these are the kinds rpod classifies in the
+			// JSON error envelope's `code` field. Branch on these instead of
+			// substring-matching the message.
+			"capacity":              "GPU/region is out of capacity right now; retry with a different --gpu-type or --data-center, or wait",
+			"timeout":               "operation did not complete within the deadline (pod wait, etc.)",
+			"auth_missing":          "no API key configured",
+			"confirmation_required": "destructive op needs --force or --yes",
 		},
 		"enums": map[string]any{
 			"pod_create.cloud_type": validCloudTypes,

@@ -40,8 +40,27 @@ rpod profile list
 ## Resources
 
 - `rpod pod {list,get,create,delete,start,stop}` — manage GPU pods (REST `/pods`)
+- `rpod pod {wait,ssh-info,url,exec,cp}` — block-until-ready, derive SSH/HTTP endpoints, run remote commands, copy files
 - `rpod volume {list,get}` — inspect persistent network volumes (REST `/networkvolumes`)
 - `rpod gpu list` — discover GPU type IDs and pricing (GraphQL; no auth required)
+
+### Create → push → run, in one pipeline
+
+```
+rpod pod create --image runpod/pytorch:2.4.0 \
+  --gpu-type "NVIDIA H200" --gpu-type "NVIDIA H200 NVL" \
+  --public-ip --ssh-key-file ~/.ssh/id_ed25519.pub \
+  --port 22/tcp --port 8000/http \
+  --wait --wait-port 22 --wait-port 8000 \
+  --json | tee pod.json
+
+POD=$(jq -r .data.id pod.json)
+rpod pod cp   ./inference.py "$POD:/workspace/"
+rpod pod exec "$POD" -- python /workspace/inference.py
+curl "$(rpod pod url "$POD" 8000)/health"
+```
+
+If every requested GPU is out of capacity the create fails with exit `6` and `error.code = "capacity"` in the structured envelope on stderr — branch on `error.code`, not the message.
 
 ## Output rules
 

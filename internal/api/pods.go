@@ -30,6 +30,43 @@ type Pod struct {
 	Env               map[string]string `json:"env,omitempty"`
 	PublicIP          string            `json:"publicIp,omitempty"`
 	CreatedAt         string            `json:"createdAt,omitempty"`
+	// Runtime is the live network surface, populated once the pod is running.
+	// Empty while the pod is queued or starting; used by `pod ssh-info`,
+	// `pod wait`, `pod url`, `pod exec`, `pod cp`.
+	Runtime *PodRuntime `json:"runtime,omitempty"`
+}
+
+// PodRuntime mirrors the `runtime` block RunPod attaches to a running pod.
+type PodRuntime struct {
+	UptimeInSeconds int            `json:"uptimeInSeconds,omitempty"`
+	Ports           []PodPort      `json:"ports,omitempty"`
+	GPUs            []PodGPUStatus `json:"gpus,omitempty"`
+	Container       *PodContainer  `json:"container,omitempty"`
+}
+
+// PodPort describes one exposed port on a running pod. `privatePort` is the
+// in-container port; `publicPort` is what RunPod maps it to externally when
+// `isIpPublic` is true. For HTTP ports without a public IP, RunPod still
+// reverse-proxies them at https://<podID>-<privatePort>.proxy.runpod.net.
+type PodPort struct {
+	IP          string `json:"ip,omitempty"`
+	IsIPPublic  bool   `json:"isIpPublic,omitempty"`
+	PrivatePort int    `json:"privatePort,omitempty"`
+	PublicPort  int    `json:"publicPort,omitempty"`
+	Type        string `json:"type,omitempty"` // "http" or "tcp"
+}
+
+// PodGPUStatus is the per-GPU runtime telemetry RunPod attaches.
+type PodGPUStatus struct {
+	ID            string  `json:"id,omitempty"`
+	GPUUtilPct    float64 `json:"gpuUtilPercent,omitempty"`
+	MemoryUtilPct float64 `json:"memoryUtilPercent,omitempty"`
+}
+
+// PodContainer is the per-container runtime telemetry RunPod attaches.
+type PodContainer struct {
+	CPUPct    float64 `json:"cpuPercent,omitempty"`
+	MemoryPct float64 `json:"memoryPercent,omitempty"`
 }
 
 // CreatePodRequest mirrors the REST API's POST /pods PodCreateInput body. We

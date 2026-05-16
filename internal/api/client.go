@@ -147,14 +147,56 @@ func parseError(status int, body []byte) error {
 	if msg == "" {
 		msg = http.StatusText(status)
 	}
+	code := fmt.Sprintf("http_%d", status)
+	// Classify capacity exhaustion distinctly so agents can branch on
+	// error.code without grepping. RunPod returns these as 400/409/422/5xx
+	// with a free-text message; the substrings below are the ones we have
+	// observed across regions and GPU types.
+	if isCapacityMessage(msg) {
+		code = "capacity"
+		// 6 (conflict) is the closest canonical exit code in the taxonomy —
+		// "this resource cannot be satisfied right now, try a different shape
+		// or wait." We keep it on the documented map rather than minting a
+		// new code, and lean on error.code for self-correction.
+		exit = 6
+	}
 	apiErr := &APIError{
 		StatusCode: status,
-		Code:       fmt.Sprintf("http_%d", status),
+		Code:       code,
 		Message:    msg,
 		Body:       string(body),
 		Exit:       exit,
 	}
+	if code == "capacity" {
+		return output.ErrorfHint(exit, code,
+			"retry with a different --gpu-type or --data-center, or wait and retry",
+			"%s (HTTP %d)", apiErr.Message, status)
+	}
 	return output.Errorf(exit, apiErr.Code, "%s (HTTP %d)", apiErr.Message, status)
+}
+
+// isCapacityMessage matches the substrings RunPod uses when a GPU SKU is
+// temporarily unavailable in a region. Kept conservative — false positives are
+// worse than false negatives here, since misclassifying a generic 400 as
+// "capacity" would tell agents to retry indefinitely.
+func isCapacityMessage(msg string) bool {
+	if msg == "" {
+		return false
+	}
+	low := strings.ToLower(msg)
+	for _, needle := range []string{
+		"no instances available",
+		"out of capacity",
+		"no longer any instances available",
+		"insufficient capacity",
+		"no capacity",
+		"capacity exceeded",
+	} {
+		if strings.Contains(low, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func truncate(s string, n int) string {

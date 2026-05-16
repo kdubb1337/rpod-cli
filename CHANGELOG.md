@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.5.0 (2026-05-16)
+
+### Added
+
+- `rpod pod wait <id>` — block until the pod reaches `--status` (default
+  `RUNNING`) and every `--port` (repeatable) is published in `runtime.ports`.
+  Exponential backoff capped at `--interval`, `--timeout` defaults to 5m.
+  Exits `124` on timeout, `3` if the pod disappears.
+- `rpod pod create --wait [--wait-port N ...] [--wait-timeout 5m]` — chains
+  create→poll so a single call returns a fully-reachable pod.
+- `rpod pod ssh-info <id>` — derives every reachable endpoint from
+  `runtime.ports`. Returns `{direct, proxy, http_proxy, public_tcp}` with a
+  ready-to-run `ssh ...` command string. Proxy SSH
+  (`<podID>@ssh.runpod.io`) is always populated as the fallback.
+- `rpod pod url <id> <port>` — prints
+  `https://<podID>-<port>.proxy.runpod.net` on a single stdout line; pipe
+  directly into `curl`.
+- `rpod pod exec <id> -- <cmd...>` — runs a command (or opens an
+  interactive shell) over SSH. Auto-discovers the endpoint, attaches the
+  user's stdio, propagates the remote exit code.
+- `rpod pod cp <src> <dst>` — scp wrapper with the same endpoint discovery
+  (`-r` for recursive). Either side may be `<podID>:<path>`.
+- `rpod pod create --ssh-key-file <path>` — reads a public key and sets the
+  `PUBLIC_KEY` env var so the container's sshd accepts it.
+- `--gpu-type` is now repeatable on `pod create`. RunPod picks the first
+  SKU with capacity, so callers no longer need to loop client-side.
+- Capacity exhaustion gets a typed envelope: `error.code = "capacity"`,
+  exit `6`. Detected from RunPod's free-text message ("no instances
+  available", "out of capacity", etc.) so agents can branch on the code
+  instead of substring-matching.
+
+### Changed
+
+- `agent-context` schema bumped to v2: adds `error_codes` map and exposes
+  the new pod subcommands and flags.
+- `api.Pod` gains a `Runtime` field (`{ports, gpus, container}`) populated
+  by the REST API once a pod is running.
+
 ## v0.4.0 (2026-05-16)
 
 ### Breaking
