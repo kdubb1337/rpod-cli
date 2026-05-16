@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.6.1 (2026-05-16)
+
+### Fixed
+
+- `rpod pod ssh-info`, `pod exec`, `pod cp`, and `pod wait` now work on
+  pods created/resumed via the RunPod web UI. RunPod's REST
+  `GET /pods/<id>` returns port info in two different shapes: API-created
+  pods get `runtime.ports[]`, while UI-created and resumed pods get an
+  empty `runtime.ports` plus a top-level `publicIp` + `portMappings`
+  object (`{"22": 12885}`). Endpoint discovery previously only consulted
+  `runtime.ports`, so UI pods silently fell back to the slow
+  `ssh.runpod.io` proxy even when a direct TCP endpoint existed.
+  `Pod.DeriveSSHInfo` and `Pod.HasPort` now consult both shapes and
+  cross-reference the spec `Ports` list (`"8000/http"`) to classify
+  HTTP vs TCP ports from `portMappings`.
+
 ## v0.6.0 (2026-05-16)
 
 ### Added

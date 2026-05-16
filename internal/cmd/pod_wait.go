@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -132,17 +134,28 @@ func podMatches(p *api.Pod, opt waitOptions) bool {
 }
 
 func summarizePorts(p *api.Pod) string {
-	if p == nil || p.Runtime == nil || len(p.Runtime.Ports) == 0 {
+	if p == nil {
 		return "none"
 	}
-	out := ""
-	for i, port := range p.Runtime.Ports {
-		if i > 0 {
-			out += ","
+	parts := []string{}
+	seen := map[int]bool{}
+	if p.Runtime != nil {
+		for _, port := range p.Runtime.Ports {
+			parts = append(parts, fmt.Sprintf("%d/%s", port.PrivatePort, port.Type))
+			seen[port.PrivatePort] = true
 		}
-		out += fmt.Sprintf("%d/%s", port.PrivatePort, port.Type)
 	}
-	return out
+	for privStr := range p.PortMappings {
+		port, err := strconv.Atoi(privStr)
+		if err != nil || seen[port] {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%d/mapped", port))
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ",")
 }
 
 func init() {

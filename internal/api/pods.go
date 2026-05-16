@@ -30,6 +30,13 @@ type Pod struct {
 	Env               map[string]string `json:"env,omitempty"`
 	PublicIP          string            `json:"publicIp,omitempty"`
 	CreatedAt         string            `json:"createdAt,omitempty"`
+	// PortMappings is the REST-only `{"<privatePort>": <publicPort>}` map that
+	// RunPod returns for UI-created / resumed pods. For those pods the GraphQL
+	// `runtime.ports` array is empty even though direct TCP routing is live,
+	// so SSH/endpoint discovery has to fall back to this field. Combined with
+	// PublicIP and the spec Ports list it carries the same info runtime.ports
+	// would, just in a different shape.
+	PortMappings map[string]int `json:"portMappings,omitempty"`
 	// Runtime is the live network surface, populated once the pod is running.
 	// Empty while the pod is queued or starting; used by `pod ssh-info`,
 	// `pod wait`, `pod url`, `pod exec`, `pod cp`.
