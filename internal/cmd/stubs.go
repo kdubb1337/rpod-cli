@@ -1,32 +1,30 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/kdubb1337/runpod-cli/internal/api"
+	"github.com/kdubb1337/runpod-cli/internal/config"
 	"github.com/kdubb1337/runpod-cli/internal/output"
 )
 
-// This file holds minimum-viable stubs for the four "Rung 3 floor" commands:
-//   - doctor          : health check across config + creds + API
-//   - agent-context   : versioned structured introspection
-//   - profile         : save / use / list / show / delete
-//   - auth            : add / list / remove
-//
-// Each is wired into the root command and produces the right output shape.
-// Replace the bodies with real implementations as you build.
+// This file holds the Rung-3-floor commands: doctor, agent-context, profile, auth, skill-path.
 
 // --- doctor -----------------------------------------------------------------
 
 var doctorCmd = &cobra.Command{
-	Use:   "doctor",
-	Short: "Health check: config, credentials, API reachability",
+	Use:     "doctor",
+	Short:   "Health check: config, credentials, API reachability",
 	Example: `  runpod doctor --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		type check struct {
@@ -34,18 +32,68 @@ var doctorCmd = &cobra.Command{
 			Status string `json:"status"`
 			Detail string `json:"detail,omitempty"`
 		}
+		checks := []check{}
+
+		// config file
+		store, err := config.Load()
+		if err != nil {
+			checks = append(checks, check{Name: "config", Status: "fail", Detail: err.Error()})
+		} else {
+			checks = append(checks, check{
+				Name:   "config",
+				Status: "ok",
+				Detail: fmt.Sprintf("%d profile(s) configured", len(store.Profiles)),
+			})
+		}
+
+		// credentials
+		cur := config.Current()
+		if cur.APIKey == "" {
+			checks = append(checks, check{
+				Name:   "credentials",
+				Status: "fail",
+				Detail: "no API key (set RUNPOD_API_KEY or run `runpod auth add <key>`)",
+			})
+		} else {
+			checks = append(checks, check{
+				Name:   "credentials",
+				Status: "ok",
+				Detail: fmt.Sprintf("api key present (%d chars)", len(cur.APIKey)),
+			})
+		}
+
+		// API reachability
+		if cur.APIKey == "" {
+			checks = append(checks, check{Name: "api_reachable", Status: "skipped", Detail: "no credentials"})
+		} else {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+			defer cancel()
+			if _, err := api.New(cur.APIKey).ListGPUTypes(ctx); err != nil {
+				checks = append(checks, check{Name: "api_reachable", Status: "fail", Detail: err.Error()})
+			} else {
+				checks = append(checks, check{Name: "api_reachable", Status: "ok"})
+			}
+		}
+
+		ok := true
+		for _, c := range checks {
+			if c.Status == "fail" {
+				ok = false
+				break
+			}
+		}
 		report := struct {
 			OK     bool    `json:"ok"`
 			Checks []check `json:"checks"`
-		}{
-			OK: true,
-			Checks: []check{
-				{Name: "config", Status: "ok"},
-				{Name: "credentials", Status: "skipped", Detail: "no auth backend wired yet"},
-				{Name: "api_reachable", Status: "skipped", Detail: "no API client wired yet"},
-			},
+		}{OK: ok, Checks: checks}
+
+		if err := output.Emit(report); err != nil {
+			return err
 		}
-		return output.Emit(report)
+		if !ok {
+			return output.Errorf(1, "doctor_failed", "one or more health checks failed")
+		}
+		return nil
 	},
 }
 
@@ -82,12 +130,15 @@ func buildAgentContext(root *cobra.Command) map[string]any {
 			"api": 5, "conflict": 6, "rate_limit": 7, "network": 8,
 			"validation": 9, "timeout": 124,
 		},
+		"enums": map[string]any{
+			"pod_create.cloud_type": validCloudTypes,
+		},
 		"commands": describeCommands(root),
 	}
 }
 
 func describeCommands(c *cobra.Command) []map[string]any {
-	var out []map[string]any
+	out := make([]map[string]any, 0, len(c.Commands()))
 	for _, sub := range c.Commands() {
 		if sub.Hidden || !sub.IsAvailableCommand() {
 			continue
@@ -125,30 +176,180 @@ var profileListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List saved profiles",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		store, err := config.Load()
+		if err != nil {
+			return err
+		}
+		names := make([]string, 0, len(store.Profiles))
+		for n := range store.Profiles {
+			names = append(names, n)
+		}
+		sort.Strings(names)
 		return output.Emit(map[string]any{
-			"profiles": []string{},
-			"hint":     "no profiles saved; create one with: runpod profile save <name>",
+			"profiles":        names,
+			"default_profile": store.DefaultProfile,
 		})
 	},
 }
 
-// Stubs for save/use/show/delete go here; same pattern.
+var profileSaveCmd = &cobra.Command{
+	Use:   "save <name>",
+	Short: "Save the current resolved configuration as a named profile",
+	Args:  cobra.ExactArgs(1),
+	Example: `  RUNPOD_API_KEY=... runpod profile save default
+  runpod profile save staging --account org_xyz`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		store, err := config.Load()
+		if err != nil {
+			return err
+		}
+		cur := config.Current()
+		if cur.APIKey == "" {
+			return output.ErrorfHint(2, "no_api_key",
+				"set RUNPOD_API_KEY or run `runpod auth add <key>` first",
+				"cannot save profile without an API key")
+		}
+		store.Profiles[args[0]] = config.Profile{
+			Account: cur.Account,
+			APIKey:  cur.APIKey,
+		}
+		if store.DefaultProfile == "" {
+			store.DefaultProfile = args[0]
+		}
+		if err := config.Save(store); err != nil {
+			return err
+		}
+		return output.Emit(map[string]any{"saved": args[0]})
+	},
+}
+
+var profileUseCmd = &cobra.Command{
+	Use:     "use <name>",
+	Short:   "Set the default profile",
+	Args:    cobra.ExactArgs(1),
+	Example: `  runpod profile use staging`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		store, err := config.Load()
+		if err != nil {
+			return err
+		}
+		if _, ok := store.Profiles[args[0]]; !ok {
+			names := make([]string, 0, len(store.Profiles))
+			for n := range store.Profiles {
+				names = append(names, n)
+			}
+			sort.Strings(names)
+			return output.ErrorfEnum(3, "profile_not_found", names,
+				"profile %q not found", args[0])
+		}
+		store.DefaultProfile = args[0]
+		if err := config.Save(store); err != nil {
+			return err
+		}
+		return output.Emit(map[string]any{"default_profile": args[0]})
+	},
+}
+
+var profileDeleteCmd = &cobra.Command{
+	Use:     "delete <name>",
+	Short:   "Delete a saved profile",
+	Args:    cobra.ExactArgs(1),
+	Example: `  runpod profile delete staging --force`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if !flagForce && !flagYes {
+			return output.ErrorfHint(2, "confirmation_required",
+				"pass --force or --yes to confirm",
+				"refusing to delete profile %s without confirmation", args[0])
+		}
+		store, err := config.Load()
+		if err != nil {
+			return err
+		}
+		if _, ok := store.Profiles[args[0]]; !ok {
+			return output.Errorf(3, "profile_not_found", "profile %q not found", args[0])
+		}
+		delete(store.Profiles, args[0])
+		if store.DefaultProfile == args[0] {
+			store.DefaultProfile = ""
+		}
+		if err := config.Save(store); err != nil {
+			return err
+		}
+		return output.Emit(map[string]any{"deleted": args[0]})
+	},
+}
 
 // --- auth -------------------------------------------------------------------
 
 var authCmd = &cobra.Command{
 	Use:   "auth",
-	Short: "Manage credentials and accounts",
+	Short: "Manage RunPod API credentials",
 }
 
 var authListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List configured accounts",
+	Short: "List configured profiles (credentials live inside profiles)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return output.Emit(map[string]any{
-			"accounts": []string{},
-			"hint":     "no accounts configured; add one with: runpod auth add <id>",
-		})
+		return profileListCmd.RunE(cmd, args)
+	},
+}
+
+var authAddCmd = &cobra.Command{
+	Use:   "add <api-key>",
+	Short: "Save an API key as a named profile",
+	Args:  cobra.ExactArgs(1),
+	Long: `Stores the RunPod API key in ~/.runpod/config.json (mode 0600).
+
+For a TTY-friendly flow you can also export RUNPOD_API_KEY and skip this command entirely.`,
+	Example: `  runpod auth add rpa_xxx --profile default
+  runpod auth add rpa_yyy --profile staging`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Reuse the persistent --profile flag (defined on root).
+		target := flagProfile
+		if target == "" {
+			target = "default"
+		}
+		store, err := config.Load()
+		if err != nil {
+			return err
+		}
+		existing := store.Profiles[target]
+		existing.APIKey = args[0]
+		store.Profiles[target] = existing
+		if store.DefaultProfile == "" {
+			store.DefaultProfile = target
+		}
+		if err := config.Save(store); err != nil {
+			return err
+		}
+		return output.Emit(map[string]any{"saved_profile": target})
+	},
+}
+
+var authRemoveCmd = &cobra.Command{
+	Use:   "remove <profile>",
+	Short: "Remove an API key from a profile",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if !flagForce && !flagYes {
+			return output.ErrorfHint(2, "confirmation_required",
+				"pass --force or --yes to confirm",
+				"refusing to clear credentials for profile %s without confirmation", args[0])
+		}
+		store, err := config.Load()
+		if err != nil {
+			return err
+		}
+		p, ok := store.Profiles[args[0]]
+		if !ok {
+			return output.Errorf(3, "profile_not_found", "profile %q not found", args[0])
+		}
+		p.APIKey = ""
+		store.Profiles[args[0]] = p
+		if err := config.Save(store); err != nil {
+			return err
+		}
+		return output.Emit(map[string]any{"cleared": args[0]})
 	},
 }
 
@@ -162,7 +363,6 @@ var skillPathCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		// Resolve common install locations: Homebrew puts share/ alongside bin/.
 		dir := filepath.Dir(exe)
 		candidates := []string{
 			filepath.Join(dir, "..", "share", "runpod", "skills", "runpod", "SKILL.md"),
@@ -181,7 +381,7 @@ var skillPathCmd = &cobra.Command{
 }
 
 func init() {
-	profileCmd.AddCommand(profileListCmd)
-	authCmd.AddCommand(authListCmd)
+	profileCmd.AddCommand(profileListCmd, profileSaveCmd, profileUseCmd, profileDeleteCmd)
+	authCmd.AddCommand(authListCmd, authAddCmd, authRemoveCmd)
 	rootCmd.AddCommand(doctorCmd, agentContextCmd, profileCmd, authCmd, skillPathCmd)
 }

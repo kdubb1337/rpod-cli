@@ -42,8 +42,13 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "runpod",
-	Short: "Agent-native CLI for <service>",
-	Long: `runpod is a hand-crafted, agent-native CLI for <service>.
+	Short: "Agent-native CLI for RunPod (GPU pods, network volumes, GPU types)",
+	Long: `runpod is a hand-crafted, agent-native CLI for the RunPod platform.
+
+Resources: pods (create/list/get/delete/start/stop), volumes (list/get),
+gpus (list available types + pricing).
+
+Authentication: set RUNPOD_API_KEY or run "runpod auth add <key>".
 
 Output rules:
   - stdout is data; stderr is human progress and errors.
