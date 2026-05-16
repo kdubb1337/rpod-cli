@@ -10,12 +10,12 @@ import "context"
 // nothing useful for `GpuAvailability` over REST — this lives on the public
 // GraphQL endpoint, like `gpu list`.
 type DataCenter struct {
-	ID               string           `json:"id"`
-	Name             string           `json:"name,omitempty"`
-	Location         string           `json:"location,omitempty"`
-	StorageSupport   bool             `json:"storageSupport"`
-	Listed           bool             `json:"listed"`
-	GpuAvailability  []GpuAvailability `json:"gpuAvailability,omitempty"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name,omitempty"`
+	Location        string            `json:"location,omitempty"`
+	StorageSupport  bool              `json:"storageSupport"`
+	Listed          bool              `json:"listed"`
+	GpuAvailability []GpuAvailability `json:"gpuAvailability,omitempty"`
 }
 
 // GpuAvailability is a single GPU SKU surfaced inside a datacenter.

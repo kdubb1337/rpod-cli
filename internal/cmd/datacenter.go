@@ -52,7 +52,8 @@ var datacenterListCmd = &cobra.Command{
 // to entries that match --gpu-type. A DC with zero matching GPUs is dropped
 // when --gpu-type is given.
 func filterDataCenters(dcs []api.DataCenter, gpuFilter, location string,
-	listedOnly, storageOnly, inStock bool) []api.DataCenter {
+	listedOnly, storageOnly, inStock bool,
+) []api.DataCenter {
 	needle := strings.ToLower(gpuFilter)
 	loc := strings.ToLower(location)
 	out := dcs[:0]
