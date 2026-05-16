@@ -130,6 +130,21 @@ rpod gpu list --min-memory 48 --secure # ≥48 GB on Secure Cloud
 
 The `id` field from `gpu list` is what `pod create --gpu-type` expects.
 
+### Datacenters
+
+```
+rpod datacenter list --json
+rpod datacenter list --gpu-type "NVIDIA GeForce RTX 4090"   # invert: which DCs carry a 4090?
+rpod datacenter list --location Europe --storage --listed-only
+rpod datacenter list --gpu-type H100 --in-stock
+```
+
+`gpu list` answers "what does this GPU cost?"; `datacenter list` answers "where
+is this GPU?". Each DC row carries `gpuAvailability[]` with `gpuTypeId`,
+`displayName`, `stockStatus` (`"Low"` or null), and `available`. The `id`
+column (`CA-MTL-3`, `EU-CZ-1`, `US-IL-1`, …) is the value to pass to
+`pod create --data-center`. Aliased as `rpod dc list`.
+
 ## Workflows
 
 ### Spin up a fresh pod for an experiment
@@ -140,7 +155,7 @@ The `id` field from `gpu list` is what `pod create --gpu-type` expects.
 4. Push code and run: `rpod pod cp ./infer.py <id>:/workspace/ && rpod pod exec <id> -- python /workspace/infer.py`
 5. Tear down: `rpod pod delete <id> --force` or `rpod pod stop <id>` to preserve the volume
 
-If a create fails with `code=capacity` (exit 6), retry with a different `--gpu-type` from `rpod gpu list`, or pass several `--gpu-type` flags in one call.
+If a create fails with `code=capacity` (exit 6), retry with a different `--gpu-type` from `rpod gpu list`, or pass several `--gpu-type` flags in one call. To pre-empt the capacity error, use `rpod datacenter list --gpu-type <id> --in-stock` to see which DCs actually have the SKU on hand and pass that DC as `--data-center`.
 
 ### Attach a persistent network volume
 

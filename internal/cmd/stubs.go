@@ -106,7 +106,9 @@ var doctorCmd = &cobra.Command{
 //	v1 — initial pod/volume/gpu surface.
 //	v2 — pod ssh-info, url, wait, exec, cp; pod create --gpu-type repeatable,
 //	     --ssh-key-file, --wait; capacity-error envelope (code=capacity).
-const SchemaVersion = 2
+//	v3 — datacenter list (and `dc` alias) with --gpu-type / --location /
+//	     --listed-only / --storage / --in-stock filters.
+const SchemaVersion = 3
 
 var agentContextCmd = &cobra.Command{
 	Use:   "agent-context",

@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.6.0 (2026-05-16)
+
+### Added
+
+- `rpod datacenter list` (alias `rpod dc list`) — surfaces RunPod's
+  datacenters and the GPU SKUs available in each. Backed by the GraphQL
+  `dataCenters { gpuAvailability { ... } }` query; works without an API
+  key. Inverts `gpu list`: instead of "what does this GPU cost?" it
+  answers "where is this GPU?".
+- Filters: `--gpu-type` (substring, prunes per-DC GPU list and drops DCs
+  with no matches), `--location`, `--listed-only`, `--storage`,
+  `--in-stock` (drops `available=false` entries).
+
+### Changed
+
+- `agent-context` schema bumped to v3 to cover the new `datacenter`
+  command surface.
+
 ## v0.5.0 (2026-05-16)
 
 ### Added
